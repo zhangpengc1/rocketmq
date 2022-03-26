@@ -54,7 +54,9 @@ public class NamesrvStartup {
     public static NamesrvController main0(String[] args) {
 
         try {
+            // 1-解析配置文件构建controller
             NamesrvController controller = createNamesrvController(args);
+            // 2-初始化controller 3-注册钩子
             start(controller);
             String tip = "The Name Server boot success. serializeType=" + RemotingCommand.getSerializeTypeConfigInThisServer();
             log.info(tip);
@@ -79,9 +81,11 @@ public class NamesrvStartup {
             return null;
         }
 
+        // 解析配置文件，填充NamesrvConfig,NettyServerConfig 属性
         final NamesrvConfig namesrvConfig = new NamesrvConfig();
         final NettyServerConfig nettyServerConfig = new NettyServerConfig();
         nettyServerConfig.setListenPort(9876);
+
         if (commandLine.hasOption('c')) {
             String file = commandLine.getOptionValue('c');
             if (file != null) {
@@ -137,12 +141,15 @@ public class NamesrvStartup {
             throw new IllegalArgumentException("NamesrvController is null");
         }
 
+        // 2-初始化
         boolean initResult = controller.initialize();
         if (!initResult) {
             controller.shutdown();
             System.exit(-3);
         }
 
+        //Step3 :注册JVM钩子函数并启动服务器，以便监昕 Broker、消息生产者的网络请求 。
+        // todo 一种常用的编程技巧，如果代码中使用了线程池，一种优雅停 机的方式就是注册一个 JVM 钩子函数， 在 JVM 进程关闭之前，先将线程池关闭 ，及时释 放资源 。
         Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
             @Override
             public Void call() throws Exception {

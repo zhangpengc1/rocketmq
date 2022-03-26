@@ -1,0 +1,40 @@
+2-RocketMQ路由中心NameServer
+	存储的什么数据？如何避免单点故障？
+	2.1 NameServer架构设计
+		broker启动时向namesvr注册，producer发送消息时先从namesvr获取broker服务器的地址列表，然后根据负载均衡算法选一台发送。
+		namesvr与broker是长连接，每10s检测心跳，宕机则移除。路由变化不会马上通知生产者
+		核心架构
+			broker每隔30s向namesvr的每一台发送心跳包，包含自身创建的topic信息
+			consumer每30s向namesvr更新topic
+			namesrv收到broker心跳记录时间戳
+			namesrv每隔10s扫面一次broker心跳记录，如果在120s内没有心跳则认为broker失效，将失效的broker移除
+	2.2 NameServer启动流程
+		1.设置配置参数namesrvconfig和nettyConfig
+		2.初始化controller（加载kv，创建定时任务等）
+		3.注册jvm钩子函数
+			tips:一种常用的编程技巧，如果代码中使用了线程池，一种优雅停 机的方式就是注册一个 JVM 钩子函数， 在 JVM 进程关闭之前，先将线程池关闭 ，及时释 放资源 。
+	2.3 NameServer路由注册，故障剔除
+		NameServer 主要作用producer和consumer提供topic路由信息
+		2.3.1 路由元信息
+			RouteInfoManager核心类，看下QueueData，BrokerData，BrokerLiveInfo
+		2.3.2 路由注册
+			通过broker与nameserver的心跳实现，broker启动时向所有的nameserver发送心跳语句，每隔30s向nameserver发送心跳包，nameserver收到心跳包更新brokerLiveTable中brokerLiveInfo的lastupdatetime。 nameserver每隔 10s扫描 brokerLiveTable，连续 !20s没收到心跳包， NameServer将移除该 Broker的路由信息同时关闭 Socket连接。
+			1. Broker发送心跳包
+				BrokerController#start，BrokerOuterAPI#registerBrokerAll
+				网络跟踪方法，RequestCode
+			2.NamerServer处理心跳包
+				DefaultRequestProcessor（网络处理器解析请求类型） -> RoutinfoManager#registerBroker
+				设计亮点
+					备注在RoutinfoManager#registerBroker中了
+		2.3.3 路由删除
+			NameServer每隔 10s 扫描 brokerLiveTable状态表，如果 BrokerLive 的 lastUpdateTimestamp 距当前超过 120s，移除该 Broker关闭连接，并同时更新topicQueueTable、 brokerAddrTable、 brokerLiveTable、 filterServerTable。
+			两个触发点触发路由删除
+				NameServer定时扫描 brokerLiveTable检测上次心跳包与 当前系统时间的时间差， 如果时间戳大于 120s，则需要移除该 Broker 信息
+				Broker在正常被关闭的情况下，会执行 unregisterBroker指令
+			步骤：
+				RouteInfoManager#scanNotActiveBroker
+		2.3.4 路由发现
+			RocketMQ 路由发现 是非实时的，当 Topic 路由出现变化后，NameServer不主动推送给客户端 ， 而是由客户端定时拉取主题最新的路由 。
+			TopicRouteData类
+			NameServer路由发现实现类
+				DefaultRequestProcessor#getRoutelnfoByTopic
