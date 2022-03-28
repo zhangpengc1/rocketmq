@@ -38,3 +38,5 @@
 			TopicRouteData类
 			NameServer路由发现实现类
 				DefaultRequestProcessor#getRoutelnfoByTopic
+
+思考，broker挂掉后nameserver必须至少120s才能将它移除，是吗？那么这样设计真的高可用吗？
