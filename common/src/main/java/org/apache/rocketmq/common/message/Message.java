@@ -22,13 +22,23 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * RocketMQ 消息封装类
+ */
 public class Message implements Serializable {
     private static final long serialVersionUID = 8445773977080406428L;
-
+    // 消息所属主题 topic
     private String topic;
+
+    // 消息 Flag(RocketMQ 不做处理)
     private int flag;
+
+    // 扩展属性
     private Map<String, String> properties;
+
+    // 消息体
     private byte[] body;
+
     private String transactionId;
 
     public Message() {
