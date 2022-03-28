@@ -33,8 +33,10 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
     public void updateFaultItem(final String name, final long currentLatency, final long notAvailableDuration) {
         FaultItem old = this.faultItemTable.get(name);
         if (null == old) {
+            // 这个类看下
             final FaultItem faultItem = new FaultItem(name);
             faultItem.setCurrentLatency(currentLatency);
+            // StartTimestamp为当前系统时间加上需要规避的时长，StartTimestamp是判断broker当前是否可用的直接依据（isAvalibale方法）
             faultItem.setStartTimestamp(System.currentTimeMillis() + notAvailableDuration);
 
             old = this.faultItemTable.putIfAbsent(name, faultItem);
@@ -98,7 +100,7 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
 
     class FaultItem implements Comparable<FaultItem> {
         private final String name;
-        private volatile long currentLatency;
+        private volatile long currentLatency; // 注意volatile修饰
         private volatile long startTimestamp;
 
         public FaultItem(final String name) {

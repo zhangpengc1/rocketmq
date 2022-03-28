@@ -43,6 +43,8 @@ import org.apache.rocketmq.remoting.RPCHook;
 import org.apache.rocketmq.remoting.exception.RemotingException;
 
 /**
+ * DefaultMQProducer是默认的消息生产者实现类，它实现 MQAdmin 的接口
+ *
  * This class is the entry point for applications intending to send messages. </p>
  *
  * It's fine to tune fields which exposes getter/setter methods, but keep in mind, all of them should work well out of
@@ -69,26 +71,31 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      *
      * See {@linktourl http://rocketmq.apache.org/docs/core-concept/} for more discussion.
      */
+    // 生产者所属组，消息服务器在回查事务状态时会随机选择该组中任何一个生产者发起事务回查请求 。
     private String producerGroup;
 
     /**
      * Just for testing or demo program
      */
+    // 默认 topicKey
     private String createTopicKey = MixAll.AUTO_CREATE_TOPIC_KEY_TOPIC;
 
     /**
      * Number of queues to create per default topic.
      */
+    // 默认主题在每一个 Broker 队列数量
     private volatile int defaultTopicQueueNums = 4;
 
     /**
      * Timeout for sending messages.
      */
+    // 发送消息默认超时时间， 默认 3s
     private int sendMsgTimeout = 3000;
 
     /**
      * Compress message body threshold, namely, message body larger than 4k will be compressed on default.
      */
+    // 消息体超过该值则启用压缩，默认 4K。
     private int compressMsgBodyOverHowmuch = 1024 * 4;
 
     /**
@@ -96,6 +103,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      *
      * This may potentially cause message duplication which is up to application developers to resolve.
      */
+    // 同步方式发送消息重试次数，默认为 2，总共执行3(重试2次) 次 。
     private int retryTimesWhenSendFailed = 2;
 
     /**
@@ -103,16 +111,19 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      *
      * This may potentially cause message duplication which is up to application developers to resolve.
      */
+    // 异步方式发送消息重试次数，默认为 2
     private int retryTimesWhenSendAsyncFailed = 2;
 
     /**
      * Indicate whether to retry another broker on sending failure internally.
      */
+    // 消息重试时选择另外一个Broker时是否不等待存储结果就返回 ， 默认为 false ？思考，存储和不存储有什么区别？
     private boolean retryAnotherBrokerWhenNotStoreOK = false;
 
     /**
      * Maximum allowed message size in bytes.
      */
+    // 允许发送的最大消息长度，默认为 4M，眩值最大值为 2"32-1
     private int maxMessageSize = 1024 * 1024 * 4; // 4M
 
     /**
@@ -694,7 +705,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
      * Same to {@link #sendOneway(Message)} with message queue selector specified.
-     *
+     *  单向方式发送消息，发送到指定的消息队列
      * @param msg Message to send.
      * @param selector Message queue selector, through which to determine target message queue to deliver message
      * @param arg Argument used along with message queue selector.
@@ -742,9 +753,9 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     /**
      * This method will be removed in a certain version after April 5, 2020, so please do not use this method.
      *
-     * @param key accesskey
-     * @param newTopic topic name
-     * @param queueNum topic's queue number
+     * @param key accesskey 目前未实际作用，可以与 newTopic 相同
+     * @param newTopic topic name 主题名称
+     * @param queueNum topic's queue number 队列数量
      * @throws MQClientException if there is any client error.
      */
     @Deprecated
@@ -760,7 +771,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * @param key accesskey
      * @param newTopic topic name
      * @param queueNum topic's queue number
-     * @param topicSysFlag topic system flag
+     * @param topicSysFlag topic system flag 主题系统标签，默认为 0
      * @throws MQClientException if there is any client error.
      */
     @Deprecated
@@ -771,6 +782,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
      * Search consume queue offset of the given time stamp.
+     * 根据 时间 戳从队列中查找其偏移量
      *
      * @param mq Instance of MessageQueue
      * @param timestamp from when in milliseconds.
@@ -784,6 +796,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
      * Query maximum offset of the given message queue.
+     * 查找该消息 队列中 最大的物理偏移量
      *
      * This method will be removed in a certain version after April 5, 2020, so please do not use this method.
      *
@@ -799,6 +812,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
      * Query minimum offset of the given message queue.
+     * 查找该消息队列中最小物理偏移量。
      *
      * This method will be removed in a certain version after April 5, 2020, so please do not use this method.
      *
@@ -829,7 +843,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
      * Query message of the given offset message ID.
-     *
+     * 根据消息偏移量查找消息
      * This method will be removed in a certain version after April 5, 2020, so please do not use this method.
      *
      * @param offsetMsgId message id
@@ -848,6 +862,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
      * Query message by key.
+     * 根据消息偏移量查找消息 。
      *
      * This method will be removed in a certain version after April 5, 2020, so please do not use this method.
      *
@@ -871,7 +886,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * Query message of the given message ID.
      *
      * This method will be removed in a certain version after April 5, 2020, so please do not use this method.
-     *
+     *  根据主题与消息 ID 查找消息
      * @param topic Topic
      * @param msgId Message ID
      * @return Message specified.
@@ -892,6 +907,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
         return this.defaultMQProducerImpl.queryMessageByUniqKey(withNamespace(topic), msgId);
     }
 
+    // 同步发送消息，具体发送到主题中的哪个消息队列由负载算法决定
     @Override
     public SendResult send(
         Collection<Message> msgs) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {

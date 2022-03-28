@@ -12,14 +12,14 @@
 		1.设置配置参数namesrvconfig和nettyConfig
 		2.初始化controller（加载kv，创建定时任务等）
 		3.注册jvm钩子函数
-			tips:一种常用的编程技巧，如果代码中使用了线程池，一种优雅停 机的方式就是注册一个 JVM 钩子函数， 在 JVM 进程关闭之前，先将线程池关闭 ，及时释 放资源 。
+			tips:一种常用的编程技巧，如果代码中使用了线程池，一种优雅停机的方式就是注册一个 JVM 钩子函数，在JVM进程关闭之前，先将线程池关闭，及时释放资源。
 	2.3 NameServer路由注册，故障剔除
-		NameServer 主要作用producer和consumer提供topic路由信息
+		NameServer 主要作用为producer和consumer提供topic路由信息
 		2.3.1 路由元信息
 			RouteInfoManager核心类，看下QueueData，BrokerData，BrokerLiveInfo
 		2.3.2 路由注册
 			通过broker与nameserver的心跳实现，broker启动时向所有的nameserver发送心跳语句，每隔30s向nameserver发送心跳包，nameserver收到心跳包更新brokerLiveTable中brokerLiveInfo的lastupdatetime。 nameserver每隔 10s扫描 brokerLiveTable，连续 !20s没收到心跳包， NameServer将移除该 Broker的路由信息同时关闭 Socket连接。
-			1. Broker发送心跳包
+			1.Broker发送心跳包
 				BrokerController#start，BrokerOuterAPI#registerBrokerAll
 				网络跟踪方法，RequestCode
 			2.NamerServer处理心跳包
@@ -34,7 +34,7 @@
 			步骤：
 				RouteInfoManager#scanNotActiveBroker
 		2.3.4 路由发现
-			RocketMQ 路由发现 是非实时的，当 Topic 路由出现变化后，NameServer不主动推送给客户端 ， 而是由客户端定时拉取主题最新的路由 。
+			RocketMQ 路由发现是非实时的，当 Topic 路由出现变化后，NameServer不主动推送给客户端，而是由客户端定时拉取主题最新的路由 。
 			TopicRouteData类
 			NameServer路由发现实现类
 				DefaultRequestProcessor#getRoutelnfoByTopic
