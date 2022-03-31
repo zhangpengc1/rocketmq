@@ -176,7 +176,7 @@ public class MQClientInstance {
             info.setOrderTopic(true);
         } else {
             // 根据 topicRouteData中的 List<QueueData>转换成问icPublis凶曲的 List<MessageQueue>列表 。
-            // 其具体实 现在 topicRou旬Data2TopicPublishh巾， 然后会更新该 MQC!ientfustan臼所管辖的所 有消息发送关于 topic 的路由信息
+            // 其具体实 现在 topicRouteData2TopicPublishh中， 然后会更新该 MQC!ientfustan臼所管辖的所 有消息发送关于 topic 的路由信息
 
             List<QueueData> qds = route.getQueueDatas();
             Collections.sort(qds);
