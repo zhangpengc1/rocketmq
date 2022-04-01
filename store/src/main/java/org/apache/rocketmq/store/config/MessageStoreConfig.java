@@ -69,16 +69,25 @@ public class MessageStoreConfig {
     // Resource reclaim interval
     private int cleanResourceInterval = 10000;
     // CommitLog removal interval
+    //  删除物理文件的间隔时间，在一次清除过程中，可能需要被删除的文件不止一个，该值指定两次删除文件的间隔时间。
     private int deleteCommitLogFilesInterval = 100;
     // ConsumeQueue removal interval
     private int deleteConsumeQueueFilesInterval = 100;
+
+    // 在清除过期文件时，如 果该文件被其他线程占用(引用次数大于0，比如读取消息)，
+    // 此时会阻止此次删除任务，同时在第一次试图删除该文件时记录当前时间戳，
+    // destroyMapedFileIntervalForcibly表示第一次拒绝删除之后能 保留文件的最大时间，在此时间内，同样可以被拒绝删除，
+    // 超过该时 间后，会将引用次数设置为负数，文件将被强制删除
     private int destroyMapedFileIntervalForcibly = 1000 * 120;
     private int redeleteHangedFileInterval = 1000 * 120;
     // When to delete,default is at 4 am
     @ImportantField
     private String deleteWhen = "04";
+
+    // 表示CommitLog文件、ConsumeQueue 文件所在磁盘分区的最大使用量，如果超过该值，则需要立即清除过 期文件。
     private int diskMaxUsedSpaceRatio = 75;
     // The number of hours to keep a log file before deleting it (in hours)
+    // 文件保留时间，如果超过了该时间，则认为是过期文件，可以被删除
     @ImportantField
     private int fileReservedTime = 72;
     // Flow control for ConsumeQueue

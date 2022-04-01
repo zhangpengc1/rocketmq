@@ -141,6 +141,7 @@ public class CommitLog {
             final long intervalForcibly,
             final boolean cleanImmediately
     ) {
+        // 执行文件销毁与删除
         return this.mappedFileQueue.deleteExpiredFileByTime(expiredTime, deleteFilesInterval, intervalForcibly, cleanImmediately);
     }
 

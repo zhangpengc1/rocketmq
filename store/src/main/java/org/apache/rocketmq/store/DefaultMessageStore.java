@@ -1273,6 +1273,8 @@ public class DefaultMessageStore implements MessageStore {
 
     private void addScheduleTask() {
 
+        // 定期清理文件
+        // RocketMQ每隔10s调度一次cleanFilesPeriodically，检测是否需要清除过期文件。执行频率可以通过cleanResourceInterval进行设置，默认10s
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
@@ -1316,6 +1318,12 @@ public class DefaultMessageStore implements MessageStore {
         // }, 1, 1, TimeUnit.HOURS);
     }
 
+    /**
+     * 清理文件
+     *
+     * 分别执行清除CommitLog文件与ConsumQueue文件
+     * ConsumQueue文件与CommitLog文件共用一套过期文件删除机制
+     */
     private void cleanFilesPeriodically() {
         this.cleanCommitLogService.run();
         this.cleanConsumeQueueService.run();
@@ -1583,15 +1591,18 @@ public class DefaultMessageStore implements MessageStore {
     class CleanCommitLogService {
 
         private final static int MAX_MANUAL_DELETE_FILE_TIMES = 20;
+
+        // 通过系统参数 Drocketmq.broker.diskSpaceWarningLevelRatio进行设置，默认0.90。如果磁盘分区使用率超过该阈值，将设置磁盘为不可写，此时会拒绝写入新消息。
         private final double diskSpaceWarningLevelRatio =
             Double.parseDouble(System.getProperty("rocketmq.broker.diskSpaceWarningLevelRatio", "0.90"));
-
+        // 通过系统参数 Drocketmq.broker.diskSpaceCleanForcibly-Ratio进行设置，默认 0.85。如果磁盘分区使用超过该阈值，建议立即执行过期文件删除， 但不会拒绝写入新消息。
         private final double diskSpaceCleanForciblyRatio =
             Double.parseDouble(System.getProperty("rocketmq.broker.diskSpaceCleanForciblyRatio", "0.85"));
         private long lastRedeleteTimestamp = 0;
 
         private volatile int manualDeleteFileSeveralTimes = 0;
 
+        // 表示是否需要立即执行清除过期文件的操作。
         private volatile boolean cleanImmediately = false;
 
         public void excuteDeleteFilesManualy() {
@@ -1601,6 +1612,7 @@ public class DefaultMessageStore implements MessageStore {
 
         public void run() {
             try {
+                // 删除CommitLog文件
                 this.deleteExpiredFiles();
 
                 this.redeleteHangedFile();
@@ -1611,14 +1623,36 @@ public class DefaultMessageStore implements MessageStore {
 
         private void deleteExpiredFiles() {
             int deleteCount = 0;
+            // 文件保留时间，如果超过了该时间，则认为是过期文件，可以被删除
             long fileReservedTime = DefaultMessageStore.this.getMessageStoreConfig().getFileReservedTime();
+            // 删除物理文件的间隔时间，在一次清除过程中，可能需要被删除的文件不止一个，该值指定两次删除文件的间隔时间。
             int deletePhysicFilesInterval = DefaultMessageStore.this.getMessageStoreConfig().getDeleteCommitLogFilesInterval();
+
+            // 在清除过期文件时，如果该文件被其他线程占用(引用次数大于0，比如读取消息)，
+            // 此时会阻止此次删除任务，同时在第一次试图删除该文件时记录当前时间戳，
+            // destroyMapedFileIntervalForcibly表示第一次拒绝删除之后能保留文件的最大时间，在此时间内，同样可以被拒绝删除，
+            // 超过该时间后，会将引用次数设置为负数，文件将被强制删除
             int destroyMapedFileIntervalForcibly = DefaultMessageStore.this.getMessageStoreConfig().getDestroyMapedFileIntervalForcibly();
 
+            // RocketMQ满足如下任意一种情况将继续执行删除文件的操作。
+
+            // 指定删除文件的时间点，RocketMQ通过deleteWhen设置每天在 固定时间执行一次删除过期文件操作，默认凌晨4点
             boolean timeup = this.isTimeToDelete();
+
+            // 检查磁盘空间是否充足，如果磁盘空间不充足，则返回true， 表示应该触发过期文件删除操作
             boolean spacefull = this.isSpaceToDelete();
+
+            // 预留手工触发机制，可以通过调用excuteDeleteFilesManualy 方法手工触发删除过期文件的操作，目前RocketMQ暂未封装手工触发文件删除的命令
             boolean manualDelete = this.manualDeleteFileSeveralTimes > 0;
 
+            /**
+             * 那么应该何时删除定时文件？
+             *
+             * 如果当前磁盘分区使用率大于diskSpaceWarningLevelRatio，应该立即启动过期文件删除操作。
+             * 如果当前磁盘分区使用率大于 diskSpaceCleanForciblyRatio，建议立即执行过期文件清除，
+             * 如果磁盘使用率低于diskSpaceCleanForciblyRatio将恢复磁盘可写。
+             * 如果当前磁盘使用率小于diskMaxUsedSpaceRatio，则返回false，表示磁盘使用率正常，否则返回true，需要执行删除过期文件
+             */
             if (timeup || spacefull || manualDelete) {
 
                 if (manualDelete)
@@ -1634,6 +1668,7 @@ public class DefaultMessageStore implements MessageStore {
                     cleanAtOnce);
 
                 fileReservedTime *= 60 * 60 * 1000;
+
 
                 deleteCount = DefaultMessageStore.this.commitLog.deleteExpiredFile(fileReservedTime, deletePhysicFilesInterval,
                     destroyMapedFileIntervalForcibly, cleanAtOnce);
@@ -1660,6 +1695,7 @@ public class DefaultMessageStore implements MessageStore {
             return CleanCommitLogService.class.getSimpleName();
         }
 
+        // 指定删除文件的时间点，RocketMQ通过deleteWhen设置每天在固定时间执行一次删除过期文件操作，默认凌晨4点
         private boolean isTimeToDelete() {
             String when = DefaultMessageStore.this.getMessageStoreConfig().getDeleteWhen();
             if (UtilAll.isItTimeToDo(when)) {
@@ -1670,13 +1706,17 @@ public class DefaultMessageStore implements MessageStore {
             return false;
         }
 
+        // 检查磁盘空间是否充足，如果磁盘空间不充足，则返回true，表示应该触发过期文件删除操作
         private boolean isSpaceToDelete() {
+            // diskMaxUsedSpaceRatio：表示CommitLog文件、ConsumeQueue 文件所在磁盘分区的最大使用量，如果超过该值，则需要立即清除过 期文件。
             double ratio = DefaultMessageStore.this.getMessageStoreConfig().getDiskMaxUsedSpaceRatio() / 100.0;
-
+            // 表示是否需要立即执行清除过期文件的操作。
             cleanImmediately = false;
 
             {
                 String storePathPhysic = DefaultMessageStore.this.getMessageStoreConfig().getStorePathCommitLog();
+
+                // 当前CommitLog目录所在的磁盘分区的磁盘使用率，通过File#getTotal Space方法获取文件所在磁盘分区的总容量，通过File#getFreeSpace方法获取文件所在磁盘分区的剩余容量。
                 double physicRatio = UtilAll.getDiskPartitionSpaceUsedPercent(storePathPhysic);
                 if (physicRatio > diskSpaceWarningLevelRatio) {
                     boolean diskok = DefaultMessageStore.this.runningFlags.getAndMakeDiskFull();
@@ -1685,6 +1725,8 @@ public class DefaultMessageStore implements MessageStore {
                     }
 
                     cleanImmediately = true;
+
+                    // diskSpaceCleanForciblyRatio 通过系统参数 Drocketmq.broker.diskSpaceCleanForcibly-Ratio进行设置，默认 0.85。如果磁盘分区使用超过该阈值，建议立即执行过期文件删除， 但不会拒绝写入新消息。
                 } else if (physicRatio > diskSpaceCleanForciblyRatio) {
                     cleanImmediately = true;
                 } else {
