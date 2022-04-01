@@ -21,18 +21,35 @@ import java.util.Map;
 public class DispatchRequest {
     private final String topic;
     private final int queueId;
+
+    // 消息物理偏移量
     private final long commitLogOffset;
     private int msgSize;
+
+    // 消息过滤tag哈希码
     private final long tagsCode;
     private final long storeTimestamp;
+
+    // 消息队列偏移量。
     private final long consumeQueueOffset;
+
+    // 消息索引key。多个索引key用空格隔开，例如 key1 key2。
     private final String keys;
     private final boolean success;
+
+    // 消息唯一键
     private final String uniqKey;
 
+    // 消息系统标记
     private final int sysFlag;
+
+    // 消息预处理事务偏移量。
     private final long preparedTransactionOffset;
+
+    // 消息属性
     private final Map<String, String> propertiesMap;
+
+    // 位图
     private byte[] bitMap;
 
     private int bufferSize = -1;//the buffer size maybe larger than the msg size if the message is wrapped by something
