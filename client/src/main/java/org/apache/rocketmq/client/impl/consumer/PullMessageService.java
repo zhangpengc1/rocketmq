@@ -43,11 +43,18 @@ public class PullMessageService extends ServiceThread {
         this.mQClientFactory = mQClientFactory;
     }
 
+    /**
+     * 延迟添加 pullRequest
+     *
+     * @param pullRequest
+     * @param timeDelay
+     */
     public void executePullRequestLater(final PullRequest pullRequest, final long timeDelay) {
         if (!isStopped()) {
             this.scheduledExecutorService.schedule(new Runnable() {
                 @Override
                 public void run() {
+                    // 添加pullRequest 所以有提供了两种方式将pullRequest放入queue中，查看调用链可知什么时候添加的
                     PullMessageService.this.executePullRequestImmediately(pullRequest);
                 }
             }, timeDelay, TimeUnit.MILLISECONDS);
@@ -56,6 +63,11 @@ public class PullMessageService extends ServiceThread {
         }
     }
 
+    /**
+     * 立即添加pullRequest到queue
+     *
+     * @param pullRequest
+     */
     public void executePullRequestImmediately(final PullRequest pullRequest) {
         try {
             this.pullRequestQueue.put(pullRequest);
@@ -77,8 +89,11 @@ public class PullMessageService extends ServiceThread {
     }
 
     private void pullMessage(final PullRequest pullRequest) {
+
+        // 根据消费组名从MQClientInstance中获取消费者的内部实现类 MQConsumerInner
         final MQConsumerInner consumer = this.mQClientFactory.selectConsumer(pullRequest.getConsumerGroup());
         if (consumer != null) {
+            // 令人意外的是，这里将consumer强制转换为 DefaultMQPushConsumerImpl，也就是PullMessageService，该线程只 为推模式服务，那拉模式如何拉取消息呢?其实细想也不难理解，对 于拉模式，RocketMQ只需要提供拉取消息API，再由应用程序调用 API。
             DefaultMQPushConsumerImpl impl = (DefaultMQPushConsumerImpl) consumer;
             impl.pullMessage(pullRequest);
         } else {
@@ -86,13 +101,22 @@ public class PullMessageService extends ServiceThread {
         }
     }
 
+    /**
+     * PullMessageService消息拉取服务线程
+     *
+     */
     @Override
     public void run() {
         log.info(this.getServiceName() + " service started");
 
+        // while(!this.isStopped())是一种通用的设计技巧，Stopped 声明为volatile，每执行一次业务逻辑，检测一下其运行状态，可以通过其他线程将Stopped设置为true，从而停止该线程。
         while (!this.isStopped()) {
             try {
+                // 从pullRequestQueue中获取一个PullRequest消息拉取任务， 如果pullRequestQueue为空，则线程将阻塞，直到有拉取任务被放入。
+                // PullRequest类图也可以看下
                 PullRequest pullRequest = this.pullRequestQueue.take();
+                // 调用pullMessage方法进行消息拉取
+                // PullRequest 是什么时候添加的呢?
                 this.pullMessage(pullRequest);
             } catch (InterruptedException ignored) {
             } catch (Exception e) {
