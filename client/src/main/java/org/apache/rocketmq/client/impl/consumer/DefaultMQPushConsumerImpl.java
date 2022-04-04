@@ -1219,6 +1219,14 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         return queueTimeSpan;
     }
 
+    /**
+     * 恢复重试消息主题名。这是为什么呢?
+     *
+     * 这是由消息重试机制决定的，RocketMQ将消息存入CommitLog文件时，如果发现消息的延时级别delayTimeLevel大于0，会先将重试主题存入消息的属性，
+     * 然后将主题名称设置为SCHEDULE_TOPIC_XXXX，以便之后重新参与消息消费
+     * @param msgs
+     * @param consumerGroup
+     */
     public void resetRetryAndNamespace(final List<MessageExt> msgs, String consumerGroup) {
         final String groupTopic = MixAll.getRetryTopic(consumerGroup);
         for (MessageExt msg : msgs) {

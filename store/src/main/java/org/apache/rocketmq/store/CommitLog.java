@@ -608,12 +608,17 @@ public class CommitLog {
         String topic = msg.getTopic();
         int queueId = msg.getQueueId();
 
-        // 如果消息的延迟级别大于0，将消息的 原主题名称 与 原消息队列ID 存入消息属性（properties）中，用延迟消息主题SCHEDULE_TOPIC_XXXX、消息队列ID更新原先消息的主题与队列。
+        // 如果消息的延迟级别大于0，将消息的原主题名称 与 原消息队列ID 存入消息属性（properties）中，用延迟消息主题SCHEDULE_TOPIC_XXXX、消息队列ID更新原先消息的主题与队列。
         // 这是并发消息消费重试关键的一步，第5章会重点探讨消息重试机制与定时消息的实现原理。
         final int tranType = MessageSysFlag.getTransactionValue(msg.getSysFlag());
         if (tranType == MessageSysFlag.TRANSACTION_NOT_TYPE
                 || tranType == MessageSysFlag.TRANSACTION_COMMIT_TYPE) {
             // Delay Delivery
+            // 在存入CommitLog文件之前，如果消息的延迟级别delayTimeLevel大于0，
+            // 将消息的主题与队列替换为定时任务主题 “SCHEDULE_TOPIC_XXXX”，队列ID为延迟级别减1。
+            // 再次将消息主题、队列存入消息属性，键分别为PROPERTY_REAL_TOPIC、 PROPERTY_REAL_QUEUE_ID
+            // ACK消息存入CommitLog文件后，将依托RocketMQ定时消息机制在延迟时间到期后，再次拉取消息，提交至消费线程池，定时任务机制
+            // ACK消息是同步发送的，如果在发送过程 中出现错误，将记录所有发送ACK消息失败的消息，然后再次封装成 ConsumeRequest，延迟5s执行
             if (msg.getDelayTimeLevel() > 0) {
                 if (msg.getDelayTimeLevel() > this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel()) {
                     msg.setDelayTimeLevel(this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel());

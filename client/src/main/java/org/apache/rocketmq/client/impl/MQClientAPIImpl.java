@@ -1124,6 +1124,23 @@ public class MQClientAPIImpl {
         return response.getCode() == ResponseCode.SUCCESS;
     }
 
+    /**
+     * ACK消息发送的网络客户端入口
+     * 命令编码为 RequestCode.CONSUMER_SEND_MSG_BACK
+     *
+     * 客户端以同步方式发送RequestCode.CONSUMER_SEND到服务端。
+     * 服务端命令处理器为SendMessageProcessor#con sumerSendMsgBack。
+     *
+     * @param addr
+     * @param msg
+     * @param consumerGroup
+     * @param delayLevel
+     * @param timeoutMillis
+     * @param maxConsumeRetryTimes
+     * @throws RemotingException
+     * @throws MQBrokerException
+     * @throws InterruptedException
+     */
     public void consumerSendMessageBack(
         final String addr,
         final MessageExt msg,

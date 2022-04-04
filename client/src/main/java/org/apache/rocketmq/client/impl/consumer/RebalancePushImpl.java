@@ -137,6 +137,16 @@ public class RebalancePushImpl extends RebalanceImpl {
         this.defaultMQPushConsumerImpl.getOffsetStore().removeOffset(mq);
     }
 
+    /**
+     * PullRequest的nextOffset计算逻辑
+     *
+     * 注意：ConsumeFromWhere相关消费进度校正策略只有在从磁盘中获取消费进度返回-1时才会生效，
+     * 如果从消息进度存储文件中返回的消费进度小于-1，表示偏移量非法，则使用偏移量-1去拉取消息，
+     * 那么会发生什么呢?首先第一次去消息服务器拉取消息时无法取到消息，但是会用-1去更新消费进度，然后将消息消费队列丢弃，在下一次消息队列负载时再次消费
+     *
+     * @param mq
+     * @return
+     */
     @Override
     public long computePullFromWhere(MessageQueue mq) {
         long result = -1;
@@ -146,7 +156,11 @@ public class RebalancePushImpl extends RebalanceImpl {
             case CONSUME_FROM_LAST_OFFSET_AND_FROM_MIN_WHEN_BOOT_FIRST:
             case CONSUME_FROM_MIN_OFFSET:
             case CONSUME_FROM_MAX_OFFSET:
+            // 从队列最新偏移量开始消费
             case CONSUME_FROM_LAST_OFFSET: {
+                // offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE)返回-1表示该消息队列刚创建。
+                // 从磁盘中读取消息队列的消费进度，如果大于0则直接返回，如果等于-1，在CONSUME_FROM_LAST_OFFSET模式下获取该消息队列当前最大的偏移量
+                // 如果小于-1，表示该消息进度文件中存储了错误的偏移量，则返回-1。
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
                 if (lastOffset >= 0) {
                     result = lastOffset;
@@ -167,7 +181,10 @@ public class RebalancePushImpl extends RebalanceImpl {
                 }
                 break;
             }
+            // 从头开始消费
             case CONSUME_FROM_FIRST_OFFSET: {
+            // 从磁盘中读取消息队列的消费进度，如果大于0则直接返回
+                // 如果等于-1，在CONSUME_FROM_FIRST_OFFSET模式下直接返回0，从头开始消费，如果小于-1，表示该消息进度文件中存储了错误的偏移量，则返回-1。
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
                 if (lastOffset >= 0) {
                     result = lastOffset;
@@ -178,7 +195,11 @@ public class RebalancePushImpl extends RebalanceImpl {
                 }
                 break;
             }
+            // 从消费者启动时间戳对应消费进度开始消费
             case CONSUME_FROM_TIMESTAMP: {
+                // 从磁盘中读取消息队列的消费进度，如果大于0则直接返回。
+                // 如果等于-1，在CONSUME_FROM_TIMESTAMP模式下会尝试将消息存储时间戳更新为消费者启动的时间戳
+                // 如果能找到则返回找到的偏移量，否则返回0。如果小于-1，表示该消息进度文件中存储了错误的偏移量，则返回-1
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
                 if (lastOffset >= 0) {
                     result = lastOffset;
