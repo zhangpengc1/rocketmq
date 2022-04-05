@@ -284,6 +284,8 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 return;
             }
         } else {
+            // 如果消息处理队列未被锁定，则延迟3s后再将PullRequest对象放入拉取任务中
+            // 如果该处理队列是第一次拉取任务，则首先计算拉取偏移量，然后向消息服务端拉取消息
             if (processQueue.isLocked()) {
                 if (!pullRequest.isLockedFirst()) {
                     final long offset = this.rebalanceImpl.computePullFromWhere(pullRequest.getMessageQueue());
@@ -945,8 +947,17 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         return this.rebalanceImpl.getSubscriptionInner();
     }
 
+    /**
+     * 消费者订阅消息主题与消息过滤表达式
+     *
+     * @param topic
+     * @param subExpression
+     * @throws MQClientException
+     */
     public void subscribe(String topic, String subExpression) throws MQClientException {
         try {
+            // 消费者订阅消息主题与消息过滤表达式。
+            // 构建订阅信息并加入RebalanceImpl，以便RebalanceImpl进行消息队列负载
             SubscriptionData subscriptionData = FilterAPI.buildSubscriptionData(this.defaultMQPushConsumer.getConsumerGroup(),
                 topic, subExpression);
             this.rebalanceImpl.getSubscriptionInner().put(topic, subscriptionData);

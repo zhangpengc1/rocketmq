@@ -67,6 +67,17 @@ public class PullAPIWrapper {
         this.unitMode = unitMode;
     }
 
+    /**
+     *
+     * 消息拉取线程PullMessageService默认会使用异步方式从服务器拉取消息
+     * 消息消费端会通过PullAPIWrapper从响应结果解析拉取到的消息。
+     * 如果消息过滤模式为TAG，并且订阅TAG集合不为空，则对消息的标志进行判断，如果集合中包含消息的TAG，则返回给消费者消费，否则跳过
+     *
+     * @param mq
+     * @param pullResult
+     * @param subscriptionData
+     * @return
+     */
     public PullResult processPullResult(final MessageQueue mq, final PullResult pullResult,
         final SubscriptionData subscriptionData) {
         PullResultExt pullResultExt = (PullResultExt) pullResult;

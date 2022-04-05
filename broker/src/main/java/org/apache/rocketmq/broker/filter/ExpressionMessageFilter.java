@@ -57,8 +57,20 @@ public class ExpressionMessageFilter implements MessageFilter {
         }
     }
 
+    /**
+     * 消费端消息过滤
+     *
+     *
+     * @param tagsCode tagsCode 消息标志的哈希码
+     * @param cqExtUnit extend unit of consume queue ConsumeQueue条目扩展属性
+     * @return
+     */
     @Override
     public boolean isMatchedByConsumeQueue(Long tagsCode, ConsumeQueueExt.CqExtUnit cqExtUnit) {
+       //  如果订阅消息为空，则返回true，不过滤消息。
+        //  如果是类过滤模式，则返回true，如果是TAG模式，并且消息的tagsCode参数为空或小于0，则返回true说明消息在发送时没有设置tag。
+        //  如果订阅消息的TAG hashcodes集合中包含消息的tagsCode，则返回true。
+        //  基于TAG模式根据ConsumeQueue进行消息过滤时只对比tag的哈希码，所以还需要 在消息消费端对消息标志进行精确匹配
         if (null == subscriptionData) {
             return true;
         }
