@@ -91,6 +91,7 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
                 return this.deleteKVConfig(ctx, request);
             case RequestCode.QUERY_DATA_VERSION:
                 return queryBrokerTopicConfig(ctx, request);
+             // 注册broker
             case RequestCode.REGISTER_BROKER:
                 Version brokerVersion = MQVersion.value2Version(request.getVersion());
                 if (brokerVersion.ordinal() >= MQVersion.Version.V3_0_11.ordinal()) {
@@ -342,8 +343,10 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
     /**
      * 路由发现实现
      *
-     * 1.调用 RouterlnfoManager 的方法，从路由 表 topicQueueTable、 brokerAddrTable、 filterServerTable中分别填充TopicRouteData中的List<Queu巳Data>、List<BrokerData>和 filterServer 地址表 。
-     * 2.如果找到主题对应的路由信息并且该主题为顺序消息，则从 NameServer KVconfig 中获取关于顺序消息相关 的配置填充路由信息 。
+     * 1.调用 RouterlnfoManager 的方法，从路由表 topicQueueTable、 brokerAddrTable、 filterServerTable中
+     * 分别填充TopicRouteData中的List<QueueData>、List<BrokerData>和 filterServer 地址表 。
+     *
+     * 2.如果找到主题对应的路由信息并且该主题为顺序消息，则从NameServerKVconfig 中获取关于顺序消息相关的配置填充路由信息 。
      *
      * @param ctx
      * @param request

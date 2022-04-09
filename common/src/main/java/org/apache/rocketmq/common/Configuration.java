@@ -38,6 +38,7 @@ public class Configuration {
     private Object storePathObject;
     private Field storePathField;
     private DataVersion dataVersion = new DataVersion();
+
     private ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
     /**
      * All properties include configs in object and extend properties.

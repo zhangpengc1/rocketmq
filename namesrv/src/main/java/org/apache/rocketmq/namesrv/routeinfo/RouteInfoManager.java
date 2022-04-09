@@ -48,25 +48,35 @@ import org.apache.rocketmq.common.sysflag.TopicSysFlag;
 import org.apache.rocketmq.remoting.common.RemotingUtil;
 
 /**
- * RocketMQ 基于订阅发布机制 ，一个Topic拥有多个消息队列，
- * 一个Broker为每一主题默认创建4个读队列4个写队列。
+ * RocketMQ 基于订阅发布机制 ，
+ *
+ * 一个Topic拥有多个消息队列，
+ * 一个Broker为每一topic默认创建4个读队列4个写队列。
+ *
  * 多个Broker组成一个集群，BrokerName由相同的多台Broker组成Master-Slave架构，
- * brokerId 为 0 代表 Master， 大于 0 表示 Slave。
+ * brokerId 为 0 代表 Master， 大于0表示 Slave。
+ *
  * BrokerLivelnfo 中 的 lastUpdateTimestamp 存储上次收到 Broker 心跳包的时间 。
  */
 public class RouteInfoManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
+
     private final static long BROKER_CHANNEL_EXPIRED_TIME = 1000 * 60 * 2;
+
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
+
     // ** Topic 消息队列路由信息，消息发送时根据路由表进行负载均衡 。
     private final HashMap<String/* topic */, List<QueueData>> topicQueueTable;
+
     // ** Broker 基础信息， 包含brokerName、所属集群名称 主备 Broker地址。
     private final HashMap<String/* brokerName */, BrokerData> brokerAddrTable;
+
     // Broker 集群信息，存储集群中所有 Broker 名称
     private final HashMap<String/* clusterName */, Set<String/* brokerName */>> clusterAddrTable;
 
     // ** Broker 状态信息 。 NameServer 每次收到心跳包时会替换该信息 。
     private final HashMap<String/* brokerAddr */, BrokerLiveInfo> brokerLiveTable;
+
     // Broker上的 FilterServer列表，用于类模式消息过滤，
     private final HashMap<String/* brokerAddr */, List<String>/* Filter Server */> filterServerTable;
 
@@ -115,12 +125,13 @@ public class RouteInfoManager {
     }
 
     /**
-     * NameServe 与 Broker 保持长连接，
-     * Broker 状态存储在 brokerLiveTable 中， NameServer 每收到一个心跳包，
-     * 将更新 brokerLiveTable 中关于 Broker 的状态信息以及路 由表( topicQueueTable、 brokerAddrTable、 brokerLiveTable、 filterServerTable)。
-     * 更新上述 路由表( HashTable)使用了锁粒度较少的读写锁，允许多个消息发送者( Producer)并发读，
-     * 保证消息发送时的高并发 。 但同一时刻 NameServer 只处理一个 Broker 心跳包，
-     * 多个心跳包请求串行执行 。 这也是读写锁经典使用场景，更多关于读写锁的信息，
+     * NameServe 与 Broker 保持长连接，Broker 状态存储在 brokerLiveTable 中，
+     * NameServer 每收到一个心跳包，将更新 brokerLiveTable 中关于 Broker 的状态信息以及路由表( topicQueueTable、 brokerAddrTable、 brokerLiveTable、 filterServerTable)。
+     * 更新上述路由表( HashTable)使用了锁粒度较少的读写锁，允许多个消息发送者( Producer)并发读，
+     * 保证消息发送时的高并发。
+     *
+     * 但同一时刻 NameServer只处理一个Broker心跳包，多个心跳包请求串行执行 。
+     * 这也是读写锁经典使用场景，更多关于读写锁的信息，
      * 可以参考笔者的博文 : http://blog.csdn.net/prestigeding/article/details/53286756o
      */
     public RegisterBrokerResult registerBroker(
@@ -170,7 +181,7 @@ public class RouteInfoManager {
                 String oldAddr = brokerData.getBrokerAddrs().put(brokerId, brokerAddr);
                 registerFirst = registerFirst || (null == oldAddr);
 
-                // 维护topicqueuetable
+                // 维护topic queuetable
                 if (null != topicConfigWrapper
                         && MixAll.MASTER_ID == brokerId) {
                     if (this.isBrokerTopicConfigChanged(brokerAddr, topicConfigWrapper.getDataVersion())
@@ -181,8 +192,8 @@ public class RouteInfoManager {
                             for (Map.Entry<String, TopicConfig> entry : tcTable.entrySet()) {
                                 // 如果Broker为Master，并且BrokerTopic配置信息发生变化或者是初次注册，
                                 // 则需要创建或更新 Topic路由元数据，填充 topicQueueTable，
-                                // 其实就是为默认主题自动注 册路由信息，其中包含 MixAII.DEFAULT TOPIC 的路由信息。
-                                // 当消息生产者发送主题时， 如果该主题未创建并且BrokerConfig的autoCreateTopicEnable为true时，
+                                // 其实就是为默认主题自动注册路由信息，其中包含 MixAII.DEFAULT TOPIC 的路由信息。
+                                // 当消息生产者发送主题时，如果该主题未创建并且BrokerConfig的autoCreateTopicEnable为true时，
                                 // 将返回MixAII. DEFAULT TOPIC的路由信息。
                                 this.createAndUpdateQueueData(brokerName, entry.getValue());
                             }
@@ -201,7 +212,7 @@ public class RouteInfoManager {
                     log.info("new broker registered, {} HAServer: {}", brokerAddr, haServerAddr);
                 }
 
-                // 更新 BrokerLivelnfo，存活 Broker信息表， BrokeLivelnfo是执行路由删除的重 要依据 。
+                // 更新 BrokerLivelnfo，存活 Broker信息表， BrokeLivelnfo是执行路由删除的重要依据 。
                 if (filterServerList != null) {
                     if (filterServerList.isEmpty()) {
                         this.filterServerTable.remove(brokerAddr);
@@ -475,9 +486,12 @@ public class RouteInfoManager {
         while (it.hasNext()) {
             Entry<String, BrokerLiveInfo> next = it.next();
             long last = next.getValue().getLastUpdateTimestamp();
+
             if ((last + BROKER_CHANNEL_EXPIRED_TIME) < System.currentTimeMillis()) {
                 RemotingUtil.closeChannel(next.getValue().getChannel());
+
                 it.remove();
+
                 log.warn("The broker channel expired, {} {}ms", next.getKey(), BROKER_CHANNEL_EXPIRED_TIME);
                 // 申请写锁，根据 brokerAddress从 brokerLiveTable、 filters巳rverTable移除
                 this.onChannelDestroy(next.getKey(), next.getValue().getChannel());
@@ -525,9 +539,8 @@ public class RouteInfoManager {
                     this.filterServerTable.remove(brokerAddrFound);
 
                     // 维护 brokerAddrTable。 遍历从 HashMap<String/* brokerNameBrokerData> brokerAddrTable，
-                    // 从 BrokerData 的 HashMap<Long/*brokerld， String/* broker address */> brokerAddrs 中，找到具体的 Broker，从 BrokerData 中 移除 ，
-                    // 如果 移除后在 BrokerData 中 不再包含其他 Broker，则在 brokerAddrTable 中移除该 brokerName对应的条目
-
+                    // 从 BrokerData 的 HashMap<Long/*brokerld， String/* broker address */> brokerAddrs 中，找到具体的Broker，从BrokerData中移除 ，
+                    // 如果移除后在BrokerData中不再包含其他Broker，则在brokerAddrTable中移除该brokerName对应的条目
                     String brokerNameFound = null;
                     boolean removeBrokerName = false;
                     Iterator<Entry<String, BrokerData>> itBrokerAddrTable =
