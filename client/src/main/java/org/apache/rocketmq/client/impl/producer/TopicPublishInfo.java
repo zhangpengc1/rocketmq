@@ -74,22 +74,26 @@ public class TopicPublishInfo {
         this.haveTopicRouterInfo = haveTopicRouterInfo;
     }
 
-    // 默认发送机制
-
     /**
-     *  首先在一次消息发送过程中，可能会多次执行选择消息队列这个方法，lastBrokerName 就是上一次选择的执行发送消息失败的Broker。
+     * 默认发送机制，选取一个发送队列
      *
-     *  第一次执行消息队列选择时， lastBrokerName 为 null，此时直接用 sendWhichQueue 自增再获取值 ， 与当前路由表中消息队列个数取模，
-     *  返回该位置的 MessageQueue(selectOneMessageQueue()方法)，如果消息发送再失败的话，
-     *  下次进行 消息队列选择 时规避上次 MesageQueue 所 在的 Broker，否则还是很有可能再次失败。
+     *
+     * 首先在一次消息发送过程中，可能会多次执行选择消息队列这个方法，lastBrokerName 就是上一次选择的执行发送消息失败的Broker。
+     *
+     * 第一次执行消息队列选择时，lastBrokerName为null，此时直接用sendWhichQueue自增再获取值，
+     * 与当前路由表中消息队列个数取模，返回该位置的 MessageQueue(selectOneMessageQueue()方法)，如果消息发送再失败的话，
+     * 下次进行消息队列选择时规避上次MesageQueue所在的Broker，否则还是很有可能再次失败。
      *
      * 该算法在一次消息发送过程中能成功规避故障的Broker，但如果Broker若机，由于路由算法中的消息队列是按Broker排序的，
-     * 如果上一次根据路由算法选择的是若机的 Broker 的第一个 队列 ，那么随后的 下 次选择的是若 机 Broker 的第二个队列，消息发送很有可能会
-     * 失败，再次 引发 重试，带来不必要的性能损耗。
+     * 如果上一次根据路由算法选择的是若机的Broker的第一个队列，那么随后的下次选择的是若机Broker的第二个队列，消息发送很有可能会
+     * 失败，再次引发重试，带来不必要的性能损耗。
      *
-     * 那么有什么方法在一次消息发送失败后，暂时将该 Broker 排除在消息队列选择范围外呢?或许有朋友会问，Broker不可用后，路由信息中为什么还会包含该Broker的路由信息呢?
-     * 其实这不难解释:首先， NameServer 检 测 Broker是否可用是有延迟的，最短为一次心跳检测间 隔(1Os); 其次， NameServer不会 检测到 Broker岩机后马上推送消息给消息生产者，而是消息生产者每隔 30s更新一次路由 信息，所以消息生产者最快感知 Broker最新的路由信息也需要 30s。 如果能引人一种机制，
-     * 在 Broker若机期间，如果一次消息发送失败后，可以将该 Broker暂时排除在消息队列的选 择范围中 。
+     * 那么有什么方法在一次消息发送失败后，暂时将该Broker排除在消息队列选择范围外呢?
+     * 或许有朋友会问，Broker不可用后，路由信息中为什么还会包含该Broker的路由信息呢?
+     *
+     * 其实这不难解释:首先，NameServer检测Broker是否可用是有延迟的，最短为一次心跳检测间隔(1Os);
+     * 其次，NameServer不会检测到Broker岩机后马上推送消息给消息生产者，而是消息生产者每隔30s更新一次路由信息，所以消息生产者最快感知Broker最新的路由信息也需要30s。
+     * 如果能引人一种机制，在Broker若机期间，如果一次消息发送失败后，可以将该Broker暂时排除在消息队列的选择范围中 。
      *
      * @param lastBrokerName
      * @return
@@ -97,13 +101,13 @@ public class TopicPublishInfo {
     public MessageQueue selectOneMessageQueue(final String lastBrokerName) {
         /**
          *  第一次执行消息队列选择时， lastBrokerName 为 null，此时直接用 sendWhichQueue 自增再获取值，与当前路由表中消息队列个数取模，
-         *  返回该位置的 MessageQueue(selectOneMessageQueue()方法)，如果消息发送再失败的话，
-         *  下次进行 消息队列选择 时规避上次 MesageQueue 所 在的 Broker，否则还是很有可能再次失败。
+         *  返回该位置的 MessageQueue(selectOneMessageQueue()方法)，如果消息发送再失败的话，下次进行 消息队列选择 时规避上次 MesageQueue 所 在的 Broker，否则还是很有可能再次失败。
          */
         if (lastBrokerName == null) {
+            // 自增数 和 队列数取模%
             return selectOneMessageQueue();
         } else {
-
+            // 不是第一次即lastBrokerName不为null
             int index = this.sendWhichQueue.getAndIncrement();
             for (int i = 0; i < this.messageQueueList.size(); i++) {
                 int pos = Math.abs(index++) % this.messageQueueList.size();
@@ -120,7 +124,9 @@ public class TopicPublishInfo {
 
     public MessageQueue selectOneMessageQueue() {
         int index = this.sendWhichQueue.getAndIncrement();
+
         int pos = Math.abs(index) % this.messageQueueList.size();
+
         if (pos < 0)
             pos = 0;
         return this.messageQueueList.get(pos);

@@ -86,39 +86,68 @@ import org.apache.rocketmq.remoting.netty.NettyClientConfig;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
 public class MQClientInstance {
+
     private final static long LOCK_TIMEOUT_MILLIS = 3000;
+
     private final InternalLogger log = ClientLogger.getLog();
+
     private final ClientConfig clientConfig;
+
     private final int instanceIndex;
+
     private final String clientId;
+
     private final long bootTimestamp = System.currentTimeMillis();
+
+    // producer 集合
     private final ConcurrentMap<String/* group */, MQProducerInner> producerTable = new ConcurrentHashMap<String, MQProducerInner>();
+
+    // consumer集合
     private final ConcurrentMap<String/* group */, MQConsumerInner> consumerTable = new ConcurrentHashMap<String, MQConsumerInner>();
+
     private final ConcurrentMap<String/* group */, MQAdminExtInner> adminExtTable = new ConcurrentHashMap<String, MQAdminExtInner>();
+
     private final NettyClientConfig nettyClientConfig;
+
     private final MQClientAPIImpl mQClientAPIImpl;
+
     private final MQAdminImpl mQAdminImpl;
+
     private final ConcurrentMap<String/* Topic */, TopicRouteData> topicRouteTable = new ConcurrentHashMap<String, TopicRouteData>();
+
     private final Lock lockNamesrv = new ReentrantLock();
+
     private final Lock lockHeartbeat = new ReentrantLock();
+
     private final ConcurrentMap<String/* Broker Name */, HashMap<Long/* brokerId */, String/* address */>> brokerAddrTable =
         new ConcurrentHashMap<String, HashMap<Long, String>>();
+
     private final ConcurrentMap<String/* Broker Name */, HashMap<String/* address */, Integer>> brokerVersionTable =
         new ConcurrentHashMap<String, HashMap<String, Integer>>();
+
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override
         public Thread newThread(Runnable r) {
             return new Thread(r, "MQClientFactoryScheduledThread");
         }
     });
+
     private final ClientRemotingProcessor clientRemotingProcessor;
+
     private final PullMessageService pullMessageService;
+
     private final RebalanceService rebalanceService;
+
     private final DefaultMQProducer defaultMQProducer;
+
     private final ConsumerStatsManager consumerStatsManager;
+
     private final AtomicLong sendHeartbeatTimesTotal = new AtomicLong(0);
+
     private ServiceState serviceState = ServiceState.CREATE_JUST;
+
     private DatagramSocket datagramSocket;
+
     private Random random = new Random();
 
     public MQClientInstance(ClientConfig clientConfig, int instanceIndex, String clientId) {
@@ -246,6 +275,7 @@ public class MQClientInstance {
                     }
                     // Start request-response channel
                     this.mQClientAPIImpl.start();
+
                     // Start various schedule tasks
                     this.startScheduledTask();
 
@@ -254,8 +284,11 @@ public class MQClientInstance {
 
                     // Start rebalance service
                     this.rebalanceService.start();
+
                     // Start push service
+                    // 生产者启动
                     this.defaultMQProducer.getDefaultMQProducerImpl().start(false);
+
                     log.info("the client factory [{}] start OK", this.clientId);
                     this.serviceState = ServiceState.RUNNING;
                     break;

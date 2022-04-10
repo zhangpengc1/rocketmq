@@ -26,6 +26,7 @@ public class MQFaultStrategy {
     private final static InternalLogger log = ClientLogger.getLog();
     private final LatencyFaultTolerance<String> latencyFaultTolerance = new LatencyFaultToleranceImpl();
 
+    // 默认值为false，不启动broker故障延迟机制，值为true时启用broker故障延迟机制。
     private boolean sendLatencyFaultEnable = false;
 
     private long[] latencyMax = {50L, 100L, 550L, 1000L, 2000L, 3000L, 15000L};
@@ -55,18 +56,31 @@ public class MQFaultStrategy {
         this.sendLatencyFaultEnable = sendLatencyFaultEnable;
     }
 
-    // broker故障机制
+    /**
+     * 选择一个消息队列发送
+     *
+     * 注意broker故障机制
+     *
+     * @param tpInfo topic发送信息
+     * @param lastBrokerName 最近发送的队列名称
+     * @return
+     */
     public MessageQueue selectOneMessageQueue(final TopicPublishInfo tpInfo, final String lastBrokerName) {
+        // 是否启动故障延迟机制 默认值为false
         if (this.sendLatencyFaultEnable) {
             try {
+                // 自增1
                 int index = tpInfo.getSendWhichQueue().getAndIncrement();
 
                 // 轮询获取一个消息队列
                 for (int i = 0; i < tpInfo.getMessageQueueList().size(); i++) {
                     int pos = Math.abs(index++) % tpInfo.getMessageQueueList().size();
+
                     if (pos < 0)
                         pos = 0;
+
                     MessageQueue mq = tpInfo.getMessageQueueList().get(pos);
+
                     // 验证消息队列是否可用，可用的话，返回，移除故障
                     if (latencyFaultTolerance.isAvailable(mq.getBrokerName())) {
                         if (null == lastBrokerName || mq.getBrokerName().equals(lastBrokerName))

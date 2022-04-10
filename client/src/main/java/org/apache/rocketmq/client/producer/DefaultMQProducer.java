@@ -62,6 +62,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * Wrapping internal implementations for virtually all methods presented in this class.
      */
     protected final transient DefaultMQProducerImpl defaultMQProducerImpl;
+
     private final InternalLogger log = ClientLogger.getLog();
     /**
      * Producer group conceptually aggregates all producer instances of exactly same role, which is particularly
@@ -83,7 +84,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     /**
      * Number of queues to create per default topic.
      */
-    // 默认主题在每一个 Broker 队列数量
+    // 默认主题在每一个Broker队列数量
     private volatile int defaultTopicQueueNums = 4;
 
     /**
@@ -117,7 +118,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     /**
      * Indicate whether to retry another broker on sending failure internally.
      */
-    // 消息重试时选择另外一个Broker时是否不等待存储结果就返回 ， 默认为 false ？思考，存储和不存储有什么区别？
+    // 消息重试时选择另外一个Broker时是否不等待存储结果就返回，默认为 false ？思考，存储和不存储有什么区别？
     private boolean retryAnotherBrokerWhenNotStoreOK = false;
 
     /**
@@ -279,6 +280,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     @Override
     public void start() throws MQClientException {
         this.setProducerGroup(withNamespace(this.producerGroup));
+        // 生产者启动
         this.defaultMQProducerImpl.start();
         if (null != traceDispatcher) {
             try {
@@ -313,6 +315,9 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     }
 
     /**
+     * 消息发送入口
+     *
+     *
      * Send message in synchronous mode. This method returns only when the sending procedure totally completes. </p>
      *
      * <strong>Warn:</strong> this method has internal retry-mechanism, that is, internal implementation will retry
@@ -330,8 +335,13 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     @Override
     public SendResult send(
         Message msg) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
+        // 消息验证
         Validators.checkMessage(msg, this);
+
+        // 查找路由，找topic
         msg.setTopic(withNamespace(msg.getTopic()));
+
+        // 发送消息
         return this.defaultMQProducerImpl.send(msg);
     }
 
@@ -706,6 +716,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     /**
      * Same to {@link #sendOneway(Message)} with message queue selector specified.
      *  单向方式发送消息，发送到指定的消息队列
+     *
      * @param msg Message to send.
      * @param selector Message queue selector, through which to determine target message queue to deliver message
      * @param arg Argument used along with message queue selector.
@@ -765,6 +776,8 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     }
 
     /**
+     * 创建主题
+     *
      * Create a topic on broker. This method will be removed in a certain version after April 5, 2020, so please do not
      * use this method.
      *
@@ -782,7 +795,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
      * Search consume queue offset of the given time stamp.
-     * 根据 时间 戳从队列中查找其偏移量
+     * 根据时间戳从队列中查找其偏移量
      *
      * @param mq Instance of MessageQueue
      * @param timestamp from when in milliseconds.
@@ -796,7 +809,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
     /**
      * Query maximum offset of the given message queue.
-     * 查找该消息 队列中 最大的物理偏移量
+     * 查找该消息队列中最大的物理偏移量
      *
      * This method will be removed in a certain version after April 5, 2020, so please do not use this method.
      *

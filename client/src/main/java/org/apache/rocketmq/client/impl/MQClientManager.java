@@ -29,7 +29,7 @@ public class MQClientManager {
     private final static InternalLogger log = ClientLogger.getLog();
     private static MQClientManager instance = new MQClientManager();
     private AtomicInteger factoryIndexGenerator = new AtomicInteger();
-    // MQClientlnstance缓存表
+    // MQClientInstance缓存表
     private ConcurrentMap<String/* clientId */, MQClientInstance> factoryTable = new ConcurrentHashMap<String, MQClientInstance>();
 
     private MQClientManager() {
@@ -44,25 +44,36 @@ public class MQClientManager {
         return getOrCreateMQClientInstance(clientConfig, null);
     }
 
-    // 创建 MQClientlnstance实例。
-    // 整个 JVM 实例中只存在一个 MQClientManager实例，
-    // 维护一个 MQClientlnstance缓存表 ConcurrentMap<String/*clientld/，MQClientinstance> factoryTable =new ConcurrentHashMap<String， MQClientlnstance>()，
-    // 也就是 同一个 clientld只会创建一个MQClientinstance
+
+    /**
+     * 创建 MQClientManager实例，整个JVM实例中只存在一个MQClientManager实例
+     *
+     * 维护一个 MQClientInstance缓存表 ConcurrentMap<String/*clientId/，MQClientInstance> factoryTable =new ConcurrentHashMap<String， MQClientInstance>()，
+     * 也就是同一个 clientId 只会创建一个MQClientInstance
+     *
+     * @param clientConfig
+     * @param rpcHook
+     * @return
+     */
     public MQClientInstance getOrCreateMQClientInstance(final ClientConfig clientConfig, RPCHook rpcHook) {
-        // clientld为客户端 IP+instance+(unitname可选)， 用程序，应用程序 岂不是 clientld相同， 会造成混乱?
+        // clientId为客户端 IP+instance+(unitname可选)，如果在同一台物理服务器部署两个应用程序，岂不是clientId相同，会造成混乱?
         /**
          * 为了避免这个问题，
-         * 如果 instance 为默认值 DEFAULT 的话，RocketMQ 会自动将 instance 设置为进程 ID，这样避免了不同进程的相互影响
-         * 但同 一 个 JVM 中 的不同消费者和不同生产者在启动时获取到的 MQClientlnstance 实例都是同 一个。
-         * 根据后面的介绍 ， MQClientlnstance 封装了 RocketMQ 网络处理 API，是消息生产者( Producer)、消息消费者 (Consumer)与 NameServer、 Broker打交道的网络通道。
+         * 如果 instance 为默认值 DEFAULT 的话，RocketMQ 会自动将 instance 设置为 进程ID，这样避免了不同进程的相互影响
+         * 但同一个JVM 中的不同消费者和不同生产者在启动时获取到的MQClientInstance实例都是同一个。
+         *
+         * 根据后面的介绍 ，MQClientInstance封装了RocketMQ网络处理API，
+         * 是消息生产者( Producer)、消息消费者 (Consumer)与 NameServer、 Broker打交道的网络通道。
          */
         String clientId = clientConfig.buildMQClientId();
 
+        // 从缓存表中获取，没有的话就新建
         MQClientInstance instance = this.factoryTable.get(clientId);
         if (null == instance) {
             instance =
                 new MQClientInstance(clientConfig.cloneClientConfig(),
                     this.factoryIndexGenerator.getAndIncrement(), clientId, rpcHook);
+
             MQClientInstance prev = this.factoryTable.putIfAbsent(clientId, instance);
             if (prev != null) {
                 instance = prev;
