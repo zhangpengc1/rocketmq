@@ -594,6 +594,12 @@ public class CommitLog {
         return beginTimeInLock;
     }
 
+    /**
+     * 写入message
+     *
+     * @param msg
+     * @return
+     */
     public PutMessageResult putMessage(final MessageExtBrokerInner msg) {
         // Set the storage time
         msg.setStoreTimestamp(System.currentTimeMillis());
@@ -614,17 +620,19 @@ public class CommitLog {
         if (tranType == MessageSysFlag.TRANSACTION_NOT_TYPE
                 || tranType == MessageSysFlag.TRANSACTION_COMMIT_TYPE) {
             // Delay Delivery
-            // 在存入CommitLog文件之前，如果消息的延迟级别delayTimeLevel大于0，
+            // 在存入CommitLog文件之前，如果消息的延迟级别 delayTimeLevel大于0，
             // 将消息的主题与队列替换为定时任务主题 “SCHEDULE_TOPIC_XXXX”，队列ID为延迟级别减1。
             // 再次将消息主题、队列存入消息属性，键分别为PROPERTY_REAL_TOPIC、 PROPERTY_REAL_QUEUE_ID
+
             // ACK消息存入CommitLog文件后，将依托RocketMQ定时消息机制在延迟时间到期后，再次拉取消息，提交至消费线程池，定时任务机制
-            // ACK消息是同步发送的，如果在发送过程 中出现错误，将记录所有发送ACK消息失败的消息，然后再次封装成 ConsumeRequest，延迟5s执行
+            // ACK消息是同步发送的，如果在发送过程中出现错误，将记录所有发送ACK消息失败的消息，然后再次封装成 ConsumeRequest，延迟5s执行
             if (msg.getDelayTimeLevel() > 0) {
                 if (msg.getDelayTimeLevel() > this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel()) {
                     msg.setDelayTimeLevel(this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel());
                 }
 
                 topic = ScheduleMessageService.SCHEDULE_TOPIC;
+                // 队列id为延迟级别 -1
                 queueId = ScheduleMessageService.delayLevel2QueueId(msg.getDelayTimeLevel());
 
                 // Backup real topic, queueId
@@ -637,6 +645,7 @@ public class CommitLog {
             }
         }
 
+        // 获取broker地址
         InetSocketAddress bornSocketAddress = (InetSocketAddress) msg.getBornHost();
         if (bornSocketAddress.getAddress() instanceof Inet6Address) {
             msg.setBornHostV6Flag();
@@ -667,6 +676,7 @@ public class CommitLog {
             msg.setStoreTimestamp(beginLockTimestamp);
 
             if (null == mappedFile || mappedFile.isFull()) {
+                // 没有就创建一个mappedFile
                 mappedFile = this.mappedFileQueue.getLastMappedFile(0); // Mark: NewFile may be cause noise
             }
             if (null == mappedFile) {
@@ -675,6 +685,8 @@ public class CommitLog {
                 return new PutMessageResult(PutMessageStatus.CREATE_MAPEDFILE_FAILED, null);
             }
 
+            // 将消息追加到内存中。
+            // todo 不是先写入堆外内存然后写pagecache吗？没有体现啊
             result = mappedFile.appendMessage(msg, this.appendMessageCallback);
 
             switch (result.getStatus()) {
@@ -724,8 +736,9 @@ public class CommitLog {
         storeStatsService.getSinglePutMessageTopicTimesTotal(msg.getTopic()).incrementAndGet();
         storeStatsService.getSinglePutMessageTopicSizeTotal(topic).addAndGet(result.getWroteBytes());
 
-        // DefaultAppendMessageCallback#doAppend只是将消息 追加到内存中，需要根据采取的是同步刷盘方式还是异步刷盘方式， 将内存中的数据持久化到磁盘中
+        // DefaultAppendMessageCallback#doAppend只是将消息追加到内存中，需要根据采取的是同步刷盘方式还是异步刷盘方式，将内存中的数据持久化到磁盘中
         handleDiskFlush(result, putMessageResult, msg);
+
         handleHA(result, putMessageResult, msg);
 
         return putMessageResult;
@@ -740,15 +753,18 @@ public class CommitLog {
      */
     public void handleDiskFlush(AppendMessageResult result, PutMessageResult putMessageResult, MessageExt messageExt) {
         // Synchronization flush
+        // 同步刷盘
         if (FlushDiskType.SYNC_FLUSH == this.defaultMessageStore.getMessageStoreConfig().getFlushDiskType()) {
-            // 整个同步刷盘流程：消费发送线程将消息追加到内存映射文件后，将同步任务 GroupCommitRequest提交到GroupCommitService线程，然后调用阻塞等待刷盘结果，超时时间默认为5s
+            // 整个同步刷盘流程：
+            // 消费发送线程将消息追加到内存映射文件后，将同步任务 GroupCommitRequest提交到GroupCommitService线程
+            // 然后调用阻塞等待刷盘结果，超时时间默认为5s
             // GroupCommitService线程处理GroupCommitRequest对象后将调用 wakeupCustomer方法将消费发送线程唤醒，并将刷盘请求告知 GroupCommitRequest
             final GroupCommitService service = (GroupCommitService) this.flushCommitLogService;
             if (messageExt.isWaitStoreMsgOK()) {
                 // 构建GroupCommitRequest同步任务并提交到GroupCommitRequest
                 GroupCommitRequest request = new GroupCommitRequest(result.getWroteOffset() + result.getWroteBytes());
                 service.putRequest(request);
-                // 等待同步刷盘任务完成，如果超时则返回刷盘错误，刷盘成功 后正常返回给调用方
+                // 等待同步刷盘任务完成，如果超时则返回刷盘错误，刷盘成功后正常返回给调用方
                 boolean flushOK = request.waitForFlush(this.defaultMessageStore.getMessageStoreConfig().getSyncFlushTimeout());
                 if (!flushOK) {
                     log.error("do groupcommit, wait for flush failed, topic: " + messageExt.getTopic() + " tags: " + messageExt.getTags()
@@ -760,10 +776,13 @@ public class CommitLog {
             }
         }
         // Asynchronous flush
+        // 异步刷盘
         else {
             if (!this.defaultMessageStore.getMessageStoreConfig().isTransientStorePoolEnable()) {
+                // 写入pagecache
                 flushCommitLogService.wakeup();
             } else {
+                // 写入堆外，然后异步写入pagecache
                 commitLogService.wakeup();
             }
         }
@@ -1102,6 +1121,10 @@ public class CommitLog {
         }
     }
 
+    /**
+     * 刷盘
+     *
+     */
     class FlushRealTimeService extends FlushCommitLogService {
         private long lastFlushTimestamp = 0;
         private long printTimes = 0;
@@ -1110,16 +1133,16 @@ public class CommitLog {
             CommitLog.log.info(this.getServiceName() + " service started");
 
             while (!this.isStopped()) {
-                // 默认为false，表示使用await方法等 待;如果为true，表示使用Thread.sleep方法等待
+                // 默认为false，表示使用await方法等待;如果为true，表示使用Thread.sleep方法等待
                 boolean flushCommitLogTimed = CommitLog.this.defaultMessageStore.getMessageStoreConfig().isFlushCommitLogTimed();
 
                 // FlushRealTimeService线程任务运 行间隔时间。
                 int interval = CommitLog.this.defaultMessageStore.getMessageStoreConfig().getFlushIntervalCommitLog();
 
-                // 一次刷盘任务至少包含页数，如 果待写入数据不足，小于该参数配置的值，将忽略本次刷盘任务，默 认4页。
+                // 一次刷盘任务至少包含页数，如果待写入数据不足，小于该参数配置的值，将忽略本次刷盘任务，默认4页。
                 int flushPhysicQueueLeastPages = CommitLog.this.defaultMessageStore.getMessageStoreConfig().getFlushCommitLogLeastPages();
 
-                // 两次真实刷盘任务的最 大间隔时间，默认10s。
+                // 两次真实刷盘任务的最大间隔时间，默认10s。
                 int flushPhysicQueueThoroughInterval =
                         CommitLog.this.defaultMessageStore.getMessageStoreConfig().getFlushCommitLogThoroughInterval();
 
@@ -1229,9 +1252,10 @@ public class CommitLog {
      * GroupCommit Service
      */
     class GroupCommitService extends FlushCommitLogService {
-        // 同步刷盘任务暂存 容器。
+        // 同步刷盘任务暂存容器。
         private volatile List<GroupCommitRequest> requestsWrite = new ArrayList<GroupCommitRequest>();
-        // GroupCommitService 线程每次处理的request容器，这是一个设计亮点，避免了任务提交与 任务执行的锁冲突
+
+        // GroupCommitService 线程每次处理的request容器，这是一个设计亮点，避免了任务提交与任务执行的锁冲突
         private volatile List<GroupCommitRequest> requestsRead = new ArrayList<GroupCommitRequest>();
 
         // 客户端提交同步刷盘任务到GroupCommitService线程，如果该线程处于等待状态则将其唤醒
@@ -1371,6 +1395,15 @@ public class CommitLog {
             return msgStoreItemMemory;
         }
 
+        /**
+         * 将消息写入内存
+         *
+         * @param fileFromOffset
+         * @param byteBuffer
+         * @param maxBlank
+         * @param msgInner
+         * @return
+         */
         public AppendMessageResult doAppend(final long fileFromOffset, final ByteBuffer byteBuffer, final int maxBlank,
                                             final MessageExtBrokerInner msgInner) {
             // STORETIMESTAMP + STOREHOSTADDRESS + OFFSET <br>
@@ -1511,7 +1544,7 @@ public class CommitLog {
             if (propertiesLength > 0)
                 this.msgStoreItemMemory.put(propertiesData);
 
-            // 将消息内容存储到ByteBuffer中，然后创建 AppendMessageResult。这里只是将消息存储在MappedFile对应的内存 映射Buffer中，并没有写入磁盘
+            // 将消息内容存储到ByteBuffer中，然后创建 AppendMessageResult。这里只是将消息存储在MappedFile对应的内存映射Buffer中，并没有写入磁盘
             final long beginTimeMills = CommitLog.this.defaultMessageStore.now();
             // Write messages to the queue buffer
             byteBuffer.put(this.msgStoreItemMemory.array(), 0, msgLen);

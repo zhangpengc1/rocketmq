@@ -91,12 +91,11 @@ public class DefaultMessageStore implements MessageStore {
     // MappedFile分配服务
     private final AllocateMappedFileService allocateMappedFileService;
 
-    // CommitLog消息 分发，根据CommitLog文件构建ConsumeQueue、Index文件。
+    // CommitLog消息分发，根据CommitLog文件构建ConsumeQueue、Index文件。
     private final ReputMessageService reputMessageService;
 
     // 存储高可用机制
     private final HAService haService;
-
 
     private final ScheduleMessageService scheduleMessageService;
 
@@ -110,6 +109,7 @@ public class DefaultMessageStore implements MessageStore {
 
     private final ScheduledExecutorService scheduledExecutorService =
         Executors.newSingleThreadScheduledExecutor(new ThreadFactoryImpl("StoreScheduledThread"));
+
     private final BrokerStatsManager brokerStatsManager;
 
     // 在消息拉取长轮询模式下的消息达到监听器。
@@ -390,7 +390,7 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     /**
-     * 消息存储入口
+     * 消息发送存储入口
      *
      * @param msg Message instance to store
      * @return
@@ -402,6 +402,7 @@ public class DefaultMessageStore implements MessageStore {
             return new PutMessageResult(PutMessageStatus.SERVICE_NOT_AVAILABLE, null);
         }
 
+        // 从不支持写入消息
         if (BrokerRole.SLAVE == this.messageStoreConfig.getBrokerRole()) {
             long value = this.printTimes.getAndIncrement();
             if ((value % 50000) == 0) {
@@ -438,6 +439,7 @@ public class DefaultMessageStore implements MessageStore {
             return new PutMessageResult(PutMessageStatus.OS_PAGECACHE_BUSY, null);
         }
 
+        // 真正开始写入
         long beginTime = this.getSystemClock().now();
         // 写入逻辑
         PutMessageResult result = this.commitLog.putMessage(msg);
@@ -446,6 +448,7 @@ public class DefaultMessageStore implements MessageStore {
         if (elapsedTime > 500) {
             log.warn("putMessage not in lock elapsed time(ms)={}, bodyLength={}", elapsedTime, msg.getBody().length);
         }
+
         this.storeStatsService.setPutMessageEntireTimeMax(elapsedTime);
 
         if (null == result || !result.isOk()) {

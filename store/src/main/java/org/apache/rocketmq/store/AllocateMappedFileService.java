@@ -36,12 +36,15 @@ import org.apache.rocketmq.store.config.BrokerRole;
  */
 public class AllocateMappedFileService extends ServiceThread {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
+
     private static int waitTimeOut = 1000 * 5;
-    private ConcurrentMap<String, AllocateRequest> requestTable =
-        new ConcurrentHashMap<String, AllocateRequest>();
-    private PriorityBlockingQueue<AllocateRequest> requestQueue =
-        new PriorityBlockingQueue<AllocateRequest>();
+
+    private ConcurrentMap<String, AllocateRequest> requestTable = new ConcurrentHashMap<String, AllocateRequest>();
+
+    private PriorityBlockingQueue<AllocateRequest> requestQueue = new PriorityBlockingQueue<AllocateRequest>();
+
     private volatile boolean hasException = false;
+
     private DefaultMessageStore messageStore;
 
     public AllocateMappedFileService(DefaultMessageStore messageStore) {

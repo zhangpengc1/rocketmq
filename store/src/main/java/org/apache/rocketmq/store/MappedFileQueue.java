@@ -228,7 +228,7 @@ public class MappedFileQueue {
         MappedFile mappedFileLast = getLastMappedFile();
 
         if (mappedFileLast == null) {
-            createOffset = startOffset - (startOffset % this.mappedFileSize);
+            createOffset = startOffset - (startOffset % this.mappedFileSize); // 0 - (0 % 0)
         }
 
         if (mappedFileLast != null && mappedFileLast.isFull()) {

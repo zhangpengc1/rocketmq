@@ -238,18 +238,27 @@ public class MappedFile extends ReferenceResource {
         return appendMessagesInner(messageExtBatch, cb);
     }
 
+    /**
+     * 将消息追加到MappedFile中
+     *
+     * @param messageExt
+     * @param cb
+     * @return
+     */
     public AppendMessageResult appendMessagesInner(final MessageExt messageExt, final AppendMessageCallback cb) {
         assert messageExt != null;
         assert cb != null;
         // 将消息追加到MappedFile中。首先获取MappedFile当前的写指针
         int currentPos = this.wrotePosition.get();
-        // 如果currentPos大于或等于文件大小 表明文件已写满 抛出AppendMessageStatus.UNKNOWN_ERROR
+
+        // 如果currentPos小于文件大小
         if (currentPos < this.fileSize) {
-            // 如果currentPos小于文件大小，通过slice()方法创建一个与原ByteBuffer共享的内存区且拥有独立的position、limit、capacity等指针
+            // 通过slice()方法创建一个与原ByteBuffer共享的内存区且拥有独立的position、limit、capacity等指针
             ByteBuffer byteBuffer = writeBuffer != null ? writeBuffer.slice() : this.mappedByteBuffer.slice();
             // 设置position为当前指针
             byteBuffer.position(currentPos);
 
+            // doAppend只是将消息写入内存中
             AppendMessageResult result;
             if (messageExt instanceof MessageExtBrokerInner) {
                 result = cb.doAppend(this.getFileFromOffset(), byteBuffer, this.fileSize - currentPos, (MessageExtBrokerInner) messageExt);
@@ -262,6 +271,8 @@ public class MappedFile extends ReferenceResource {
             this.storeTimestamp = result.getStoreTimestamp();
             return result;
         }
+
+        // 如果currentPos大于或等于文件大小 表明文件已写满 抛出AppendMessageStatus.UNKNOWN_ERROR
         log.error("MappedFile.appendMessage return null, wrotePosition: {} fileSize: {}", currentPos, this.fileSize);
         return new AppendMessageResult(AppendMessageStatus.UNKNOWN_ERROR);
     }

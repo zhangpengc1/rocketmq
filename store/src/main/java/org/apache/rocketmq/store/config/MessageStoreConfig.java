@@ -626,6 +626,8 @@ public class MessageStoreConfig {
     }
 
     /**
+     * 根据这个可以明显判断 transientStorePoolEnable机制是针对异步刷盘的。
+     *
      * Enable transient commitLog store pool only if transientStorePoolEnable is true and the FlushDiskType is
      * ASYNC_FLUSH
      *
