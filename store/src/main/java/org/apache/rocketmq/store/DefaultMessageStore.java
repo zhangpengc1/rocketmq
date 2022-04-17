@@ -101,7 +101,7 @@ public class DefaultMessageStore implements MessageStore {
 
     private final StoreStatsService storeStatsService;
 
-    // 消息堆内存缓存
+    // 消息堆外内存缓存
     private final TransientStorePool transientStorePool;
 
     private final RunningFlags runningFlags = new RunningFlags();
@@ -192,6 +192,8 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     /**
+     * 文件加载流程
+     *
      * @throws IOException
      */
     public boolean load() {
@@ -291,7 +293,8 @@ public class DefaultMessageStore implements MessageStore {
 
             this.reputMessageService.setReputFromOffset(maxPhysicalPosInLogicQueue);
 
-            // 过开启一个线程ReputMessageServcie来准实时转发CommitLog文件的更新事件，相应的任务处理器根据转发的消息及时更新ConsumeQueue文件、 Index文件
+            // 通过过开启一个线程ReputMessageServcie来准实时转发CommitLog文件的更新事件
+            // 相应的任务处理器根据转发的消息及时更新ConsumeQueue文件、Index文件
             this.reputMessageService.start();
 
             /**
@@ -1963,7 +1966,8 @@ public class DefaultMessageStore implements MessageStore {
             }
             for (boolean doNext = true; this.isCommitLogAvailable() && doNext; ) {
 
-                // [书上这么说的，且书上的代码版本在这里不一致]如果允许消息重复，将重新推送偏移量设置为CommitLog文件的提交偏移量，如果不允许重复推送，则设置重新推送偏移为CommitLog的 当前最大偏移量
+                // [书上这么说的，且书上的代码版本在这里不一致]
+                // 如果允许消息重复，将重新推送偏移量设置为CommitLog文件的提交偏移量，如果不允许重复推送，则设置重新推送偏移为CommitLog的当前最大偏移量
                 if (DefaultMessageStore.this.getMessageStoreConfig().isDuplicationEnable()
                     && this.reputFromOffset >= DefaultMessageStore.this.getConfirmOffset()) {
                     break;
@@ -1977,7 +1981,7 @@ public class DefaultMessageStore implements MessageStore {
 
                         for (int readSize = 0; readSize < result.getSize() && doNext; ) {
 
-                            // 从result返回的ByteBuffer中循环读取消息，一次读取 一条，创建Dispatch Request对象。
+                            // 从result返回的ByteBuffer中循环读取消息，一次读取 一条，创建DispatchRequest对象。
                             // 如果消息长度大于0，则调用doDispatch()方法。
                             DispatchRequest dispatchRequest =
                                 DefaultMessageStore.this.commitLog.checkMessageAndReturnSize(result.getByteBuffer(), false, false);

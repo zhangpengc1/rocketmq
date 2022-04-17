@@ -32,11 +32,19 @@ public class IndexFile {
     private static int hashSlotSize = 4;
     private static int indexSize = 20;
     private static int invalidIndex = 0;
+
+    // hashSlot 数量
     private final int hashSlotNum;
+
     private final int indexNum;
+
     private final MappedFile mappedFile;
+
     private final FileChannel fileChannel;
+
     private final MappedByteBuffer mappedByteBuffer;
+
+    // index文件头
     private final IndexHeader indexHeader;
 
     public IndexFile(final String fileName, final int hashSlotNum, final int indexNum,
@@ -90,7 +98,7 @@ public class IndexFile {
     }
 
     /**
-     *
+     * 存入index文件
      *
      * @param key 消息索引
      * @param phyOffset 消息物理偏移量
@@ -98,23 +106,25 @@ public class IndexFile {
      * @return
      */
     public boolean putKey(final String key, final long phyOffset, final long storeTimestamp) {
-        // 当前已使用条目大于、等于允许最大条目数时，返回 fasle，表示当前Index文件已写满。
+        // 当前已使用条目大于、等于允许最大条目数时，返回fasle，表示当前Index文件已写满。
 
         // 如果当前index文件未写满，则根据key算出哈希码。
-        // 根据keyHash对哈希槽数量取余定位到哈希码对应的哈希槽下标，哈希码对应的哈希槽的物理地址为IndexHeader(40字节)加上下标乘以每个哈希槽的大小(4字节)
         if (this.indexHeader.getIndexCount() < this.indexNum) {
-            int keyHash = indexKeyHashMethod(key);
+            // 根据keyHash对哈希槽数量取余定位到哈希码对应的哈希槽下标
+            int keyHash = indexKeyHashMethod(key); // abs(key.hashcode)
+            // keyHash 和 hashSlotNum取模
             int slotPos = keyHash % this.hashSlotNum;
+            // 得出槽的位置。哈希码对应的哈希槽的物理地址为IndexHeader(40字节)加上下标乘以每个哈希槽的大小(4字节)
             int absSlotPos = IndexHeader.INDEX_HEADER_SIZE + slotPos * hashSlotSize;
 
             FileLock fileLock = null;
 
             try {
+                fileLock = this.fileChannel.lock(absSlotPos, hashSlotSize,false);
 
-                // fileLock = this.fileChannel.lock(absSlotPos, hashSlotSize,
-                // false);
                 // 读取哈希槽中存储的数据，如果哈希槽存储的数据小于0 或大于当前Index文件中的索引条目，则将slotValue设置为0
                 int slotValue = this.mappedByteBuffer.getInt(absSlotPos);
+
                 if (slotValue <= invalidIndex || slotValue > this.indexHeader.getIndexCount()) {
                     slotValue = invalidIndex;
                 }
@@ -134,25 +144,30 @@ public class IndexFile {
 
                 // 将条目信息存储在Index文件中
                 /**
-                 * 1)计算新添加条目的起始物理偏移量:头部字节长度+哈希槽数 量×单个哈希槽大小(4个字节)+当前Index条目个数×单个Index条 目大小(20个字节)。
+                 * 1)计算新添加条目的起始物理偏移量:
+                 *      头部字节长度 + 哈希槽数量×单个哈希槽大小(4个字节)+当前Index条目个数×单个Index条 目大小(20个字节)。
+                 *
                  * 2)依次将哈希码、消息物理偏移量、消息存储时间戳与Index文 件时间戳、当前哈希槽的值存入MappedByteBuffer。
-                 * 3)将当前Index文件中包含的条目数量存入哈希槽中，覆盖原先 哈希槽的值。
+                 *
+                 * 3)将当前Index文件中包含的条目数量存入哈希槽中，覆盖原先哈希槽的值。
                  *
                  * 以上是哈希冲突链式解决方案的关键实现，哈希槽中存储的是该哈希码对应的最新Index条目的下标，
                  * 新的Index条目最后4个字节存储该哈希码上一个条目的Index下标。
-                 * 如果哈希槽中存储的值为0或大于 当前Index文件最大条目数或小于-1，表示该哈希槽当前并没有与之对应的Index条目。
-                 * 值得注意的是，Index文件条目中存储的不是消息索 引key，而是消息属性key的哈希，在根据key查找时需要根据消息物理偏移量找到消息，
+                 * 如果哈希槽中存储的值为0或大于当前Index文件最大条目数或小于-1，表示该哈希槽当前并没有与之对应的Index条目。
+                 * 值得注意的是，Index文件条目中存储的不是消息索引key，而是消息属性key的哈希，在根据key查找时需要根据消息物理偏移量找到消息，
                  * 进而验证消息key的值。之所以只存储哈希，而不存储具体的key，是为了将Index条目设计为定长结构，才能方便地检索与定位条目
                  */
+                // 1.计算新添加条目的起始物理偏移量:
+                // 头部字节长度 + 哈希槽数量×单个哈希槽大小(4个字节)+当前Index条目个数×单个Index条 目大小(20个字节)。
                 int absIndexPos =
                     IndexHeader.INDEX_HEADER_SIZE + this.hashSlotNum * hashSlotSize
                         + this.indexHeader.getIndexCount() * indexSize;
-
+                // 2)依次将哈希码、消息物理偏移量、消息存储时间戳与Index文件时间戳、当前哈希槽的值存入MappedByteBuffer。
                 this.mappedByteBuffer.putInt(absIndexPos, keyHash);
                 this.mappedByteBuffer.putLong(absIndexPos + 4, phyOffset);
                 this.mappedByteBuffer.putInt(absIndexPos + 4 + 8, (int) timeDiff);
                 this.mappedByteBuffer.putInt(absIndexPos + 4 + 8 + 4, slotValue);
-
+                // 3.将当前Index文件中包含的条目数量存入哈希槽中，覆盖原先哈希槽的值。
                 this.mappedByteBuffer.putInt(absSlotPos, this.indexHeader.getIndexCount());
 
                 // 更新文件索引头信息。
@@ -215,6 +230,7 @@ public class IndexFile {
     }
 
     /**
+     * 根据索引key查找消息
      *
      *
      * @param phyOffsets 查找到的消息物理偏移量

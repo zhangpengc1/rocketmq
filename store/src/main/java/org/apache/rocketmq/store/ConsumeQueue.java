@@ -28,7 +28,9 @@ import org.apache.rocketmq.store.config.StorePathConfigHelper;
 public class ConsumeQueue {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
+    // 每个条目的大小 8+4+8
     public static final int CQ_STORE_UNIT_SIZE = 20;
+
     private static final InternalLogger LOG_ERROR = InternalLoggerFactory.getLogger(LoggerName.STORE_ERROR_LOGGER_NAME);
 
     private final DefaultMessageStore defaultMessageStore;
@@ -165,12 +167,14 @@ public class ConsumeQueue {
 
         if (mappedFile != null) {
             long offset = 0;
+
             // 采用二分查找来加速检索。首先计算最低查找偏移量，取消息队列最小偏移量与该文件注销偏移量的差为最小偏移量low。
-            // 获取当前存储文件中有效的最小消息物理偏移量minPhysicOffset，如果查找到的消息偏移量小于该物理偏移量，则结束该查找过程
             int low = minLogicOffset > mappedFile.getFileFromOffset() ? (int) (minLogicOffset - mappedFile.getFileFromOffset()) : 0;
             int high = 0;
             int midOffset = -1, targetOffset = -1, leftOffset = -1, rightOffset = -1;
             long leftIndexValue = -1L, rightIndexValue = -1L;
+
+            // 获取当前存储文件中有效的最小消息物理偏移量minPhysicOffset，如果查找到的消息偏移量小于该物理偏移量，则结束该查找过程
             long minPhysicOffset = this.defaultMessageStore.getMinPhyOffset();
             SelectMappedBufferResult sbr = mappedFile.selectMappedBuffer(0);
             if (null != sbr) {
@@ -179,7 +183,6 @@ public class ConsumeQueue {
                 try {
 
                     // 二分查找的常规退出循环为low>high，首先查找中间的偏移量 midOffset，将ConsumeQueue文件对应的ByteBuffer定位到 midOffset，然后读取4个字节，获取该消息的物理偏移量
-
                     /**
                      * 1)如果得到的物理偏移量小于当前的最小物理偏移量，说明待查 找消息的物理偏移量肯定大于midOffset，则将low设置为midOffset， 继续折半查找。
                      * 2)如果得到的物理偏移量大于最小物理偏移量，说明该消息是有 效消息，则根据消息偏移量和消息长度获取消息的存储时间戳。
@@ -529,8 +532,9 @@ public class ConsumeQueue {
     /**
      * 根据startIndex获取消息消费队列条目
      *
-     * 通过startIndex×20 得到在ConsumeQueue文件的物理偏移量，
+     * 通过 startIndex×20 得到在ConsumeQueue文件的物理偏移量，
      * 如果该偏移量小于 minLogicOffset，则返回null，说明该消息已被删除，如果大于 minLogicOffset，则根据偏移量定位到具体的物理文件。
+     *
      * 通过将该偏移量与物理文件的大小取模 获取在该文件的偏移量，从偏移量开始连续读取20个字节即可。
      *
      *
@@ -538,8 +542,12 @@ public class ConsumeQueue {
      * @return
      */
     public SelectMappedBufferResult getIndexBuffer(final long startIndex) {
+
         int mappedFileSize = this.mappedFileSize;
+        // CQ_STORE_UNIT_SIZE 每个条目的大小
         long offset = startIndex * CQ_STORE_UNIT_SIZE;
+
+        // 如果大于 minLogicOffset，则根据偏移量定位到具体的物理文件
         if (offset >= this.getMinLogicOffset()) {
             MappedFile mappedFile = this.mappedFileQueue.findMappedFileByOffset(offset);
             if (mappedFile != null) {
@@ -547,6 +555,7 @@ public class ConsumeQueue {
                 return result;
             }
         }
+        // 果该偏移量小于 minLogicOffset，则返回null，说明该消息已被删除
         return null;
     }
 

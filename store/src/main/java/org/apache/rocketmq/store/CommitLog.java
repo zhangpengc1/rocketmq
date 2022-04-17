@@ -165,12 +165,15 @@ public class CommitLog {
     }
 
     /**
+     * 正常停止恢复
+     *
      * When the normal exit, data recovery, all memory data have been flush
      */
     public void recoverNormally(long maxPhyOffsetOfConsumeQueue) {
         // Broker正常停止再重启时，从倒数第3个文件开始恢复，如果不足3个文件，则从第一个文件开始恢复。
         // checkCRCOnRecover参数用于在进行文件恢复时查找消息是否验证CRC
         boolean checkCRCOnRecover = this.defaultMessageStore.getMessageStoreConfig().isCheckCRCOnRecover();
+
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
             // Began to recover from the last third file
@@ -438,7 +441,7 @@ public class CommitLog {
     /**
      * Broker异常停止文件恢复
      * <p>
-     * 异常文件恢复与正常停止文件恢复的 步骤基本相同，主要差别有两个:
+     * 异常文件恢复与正常停止文件恢复的步骤基本相同，主要差别有两个:
      * 首先，Broker正常停止默认从倒数第三个文件开始恢复，而异常停止则需要从最后一个文件倒序推进，找到第一个消息存储正常的文件;
      * 其次，如果CommitLog目录没有消息 文件，在ConsuneQueue目录下存在的文件则需要销毁
      *
@@ -974,11 +977,15 @@ public class CommitLog {
      */
     public SelectMappedBufferResult getMessage(final long offset, final int size) {
         // 首先根据偏移找到文件所在的物理偏移量，然后用offset与文件长度取余，得到在文件内的偏移量，从该偏移量读取size长度的内容并返回。
-        // 如果只根据消息偏移量 查找消息，则首先找到文件内的偏移量，然后尝试读取4字节，获取消 息的实际长度，最后读取指定字节。
-        int mappedFileSize = this.defaultMessageStore.getMessageStoreConfig().getMappedFileSizeCommitLog();
+        // 如果只根据消息偏移量查找消息，则首先找到文件内的偏移量，然后尝试读取4字节，获取消息的实际长度，最后读取指定字节。
+        int mappedFileSize = this.defaultMessageStore.getMessageStoreConfig().getMappedFileSizeCommitLog(); // 1G
+
+        // 根据消息偏移量offset查找MappedFile
         MappedFile mappedFile = this.mappedFileQueue.findMappedFileByOffset(offset, offset == 0);
         if (mappedFile != null) {
+            // 偏移量 与 mappedFileSize（文件大小）取模，得到offset在对应mapperfile中的位置
             int pos = (int) (offset % mappedFileSize);
+            // 根据pos和size在mapperfile中查找消息
             return mappedFile.selectMappedBuffer(pos, size);
         }
         return null;

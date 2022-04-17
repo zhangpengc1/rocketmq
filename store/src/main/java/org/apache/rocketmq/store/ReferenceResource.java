@@ -63,7 +63,7 @@ public abstract class ReferenceResource {
             if ((System.currentTimeMillis() - this.firstShutdownTimestamp) >= intervalForcibly) {
                 this.refCount.set(-1000 - this.getRefCount());
 
-                // 【重点】在整个MappedFile销毁的过程中，首先需要释放资源，释放资源 的前提条件是该MappedFile的引用小于、等于0
+                // 【重点】在整个MappedFile销毁的过程中，首先需要释放资源，释放资源的前提条件是该MappedFile的引用小于、等于0
                 this.release();
             }
         }
@@ -72,10 +72,9 @@ public abstract class ReferenceResource {
     /**
      * 释放资源
      *
-     *
      */
     public void release() {
-        // 将引用次数减1，如果引用数小于、等于0，则执行cleanup()方 法
+        // 将引用次数减1，如果引用数小于等于0，则执行cleanup()方 法
         long value = this.refCount.decrementAndGet();
         if (value > 0)
             return;

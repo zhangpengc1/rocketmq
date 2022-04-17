@@ -179,6 +179,7 @@ public class MappedFileQueue {
     public boolean load() {
         File dir = new File(this.storePath);
         File[] files = dir.listFiles();
+
         if (files != null) {
             // ascending order
             Arrays.sort(files);

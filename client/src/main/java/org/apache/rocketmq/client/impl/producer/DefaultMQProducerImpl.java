@@ -783,7 +783,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         if (topicPublishInfo.isHaveTopicRouterInfo() || topicPublishInfo.ok()) {
             return topicPublishInfo;
         } else {
-            // 如果没有缓存或没有包含消息队列，则向 NameServer查询该 topic 的路由信息。
+            // 如果没有缓存或没有包含消息队列，则向NameServer查询该 topic 的路由信息。
             this.mQClientFactory.updateTopicRouteInfoFromNameServer(topic, true, this.defaultMQProducer);
             topicPublishInfo = this.topicPublishInfoTable.get(topic);
             return topicPublishInfo;

@@ -20,6 +20,9 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * Index文件头
+ */
 public class IndexHeader {
     public static final int INDEX_HEADER_SIZE = 40;
 
@@ -42,12 +45,24 @@ public class IndexHeader {
     private static int indexCountIndex = 36;
 
     private final ByteBuffer byteBuffer;
+
+    // index 文件中消息的最小存储时间
     private AtomicLong beginTimestamp = new AtomicLong(0);
+
+    // index文件中消息的最大存储时间
     private AtomicLong endTimestamp = new AtomicLong(0);
+
+    // index文件中消息的最小物理偏移量（commitlog文件偏移量）
     private AtomicLong beginPhyOffset = new AtomicLong(0);
+
+    // index文件中消息的最大物理偏移量（commitlog文件偏移量）
     private AtomicLong endPhyOffset = new AtomicLong(0);
+
+    // hashSlot个数，并不是哈希槽使用的个数
     private AtomicInteger hashSlotCount = new AtomicInteger(0);
 
+    // index条目列表当前已使用的个数，index条目在index条目列表中按顺序存储
+    // 默认最大2000万个
     private AtomicInteger indexCount = new AtomicInteger(1);
 
     public IndexHeader(final ByteBuffer byteBuffer) {
